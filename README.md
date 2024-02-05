@@ -7,6 +7,62 @@ VALL-E X 用のツール等を作っているリポジトリ
 https://github.com/kuwacom/vaLL-E-X-Tools
 
 
+# How To Use
+以下本家リポジトリを参考に進めていきます
+https://github.com/Plachtaa/VALL-E-X
+
+## Python環境の作成
+### 仮想環境の作成
+次に `venv` を利用して環境を構築していきます
+
+それぞれのOSにあったコマンドを実行してください
+(コマンド等が違う場合はその都度修正してください)
+
+> Windows
+```shell
+py -3.10 -m venv venv
+```
+> Linux
+```bash
+python3 -m venv venv
+```
+
+### モジュールのインストール
+次にモジュールをインストールします
+
+先ほど準備した仮想環境へアクティベートした状態で行ってください
+
+```
+./venv/Scripts/activate
+```
+
+プリセットでは二つの環境のみ用意してありますのでそれ以外の場合は各自変更してください
+
+> CUDA 12.1
+```bash
+pip install -r req-cuda-12.1.txt
+```
+torch類は https://pytorch.org/get-started/locally/ より手動で入れます
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+> CUDA 12.1
+```bash
+pip install -r req.txt
+```
+
+以上で環境の構築は終了です
+
+## WEBGUIの起動
+環境構築が終わったら、WEBGUIを起動します。
+
+> Windows
+Windowsの場合、アクティベート等気にせず以下のバッチファイルを実行すれば起動可能です。
+```
+start-webgui-windows.bat
+```
+
+
 # 元リポジトリのREADME
 # VALL-E X: Multilingual Text-to-Speech Synthesis and Voice Cloning 🔊
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/qCBRmAnTxg)

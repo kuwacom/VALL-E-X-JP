@@ -1,8 +1,10 @@
+# ここは各マシーンに合わせて調整してください
+# torch==2.2.0+cu121
+# torchvision==2.2.0+cu121
+# torchaudio==0.17.0+cu121
+
 soundfile
 numpy
-torch
-torchvision
-torchaudio
 tokenizers
 encodec
 langid
@@ -21,3 +23,6 @@ nltk
 sudachipy
 sudachidict_core
 vocos
+
+ipython
+ipykernel

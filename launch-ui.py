@@ -8,6 +8,7 @@ import tempfile
 import platform
 import webbrowser
 import sys
+import json
 print(f"default encoding is {sys.getdefaultencoding()},file system encoding is {sys.getfilesystemencoding()}")
 print(f"You are using Python version {platform.python_version()}")
 if(sys.version_info[0]<3 or sys.version_info[1]<7):
@@ -196,7 +197,7 @@ def make_npz_prompt(name, uploaded_audio, recorded_audio, transcript_content):
 
     # save as npz file
     np.savez(os.path.join(tempfile.gettempdir(), f"{name}.npz"),
-             audio_tokens=audio_tokens, text_tokens=text_tokens, lang_code=lang2code[lang_pr])
+            audio_tokens=audio_tokens, text_tokens=text_tokens, lang_code=lang2code[lang_pr])
     return message, os.path.join(tempfile.gettempdir(), f"{name}.npz")
 
 
@@ -332,8 +333,17 @@ def infer_from_prompt(text, language, accent, preset_prompt, prompt_file):
     text_prompts = torch.tensor(text_prompts).type(torch.int32)
 
     enroll_x_lens = text_prompts.shape[-1]
-    logging.info(f"synthesize text: {text}")
     phone_tokens, langs = text_tokenizer.tokenize(text=f"_{text}".strip())
+    
+    with open('./utils/g2p/bpe_69.json', 'r', encoding='utf-8') as f:
+        bpe_69 = json.load(f)
+    vocab_list = bpe_69['model']['vocab']
+    reverse_vocab_list = {value: key for key, value in vocab_list.items()}
+    phoneme_list = [reverse_vocab_list[num] for num in phone_tokens]
+    # 音素トークンを音素へ置き換えた物を表示
+    print('入力テキスト: ' + text)
+    print('出力音素: ' + ''.join(phoneme_list))
+
     text_tokens, text_tokens_lens = text_collater(
         [
             phone_tokens
@@ -359,7 +369,8 @@ def infer_from_prompt(text, language, accent, preset_prompt, prompt_file):
     features = vocos.codes_to_features(frames)
     samples = vocos.decode(features, bandwidth_id=torch.tensor([2], device=device))
 
-    model.to('cpu')
+    # model.to('cpu')
+    model.to("cuda:0")
     torch.cuda.empty_cache()
 
     message = f"sythesized text: {text}"
@@ -512,32 +523,38 @@ def main():
     app = gr.Blocks(title="VALL-E X")
     with app:
         gr.Markdown(top_md)
-        with gr.Tab("Infer from audio"):
+        with gr.Tab("音声から推論"):
             gr.Markdown(infer_from_audio_md)
             with gr.Row():
                 with gr.Column():
 
-                    textbox = gr.TextArea(label="Text",
-                                          placeholder="Type your sentence here",
-                                          value="Welcome back, Master. What can I do for you today?", elem_id=f"tts-input")
+                    textbox = gr.TextArea(
+                        label="Text",
+                        placeholder="ここに文章を入力",
+                        value="おかえりなさいませ、ご主人様。本日はどのようなご用件でしょうか？", elem_id=f"tts-input"
+                        )
                     language_dropdown = gr.Dropdown(choices=['auto-detect', 'English', '中文', '日本語'], value='auto-detect', label='language')
                     accent_dropdown = gr.Dropdown(choices=['no-accent', 'English', '中文', '日本語'], value='no-accent', label='accent')
-                    textbox_transcript = gr.TextArea(label="Transcript",
-                                          placeholder="Write transcript here. (leave empty to use whisper)",
-                                          value="", elem_id=f"prompt-name")
-                    upload_audio_prompt = gr.Audio(label='uploaded audio prompt', source='upload', interactive=True)
-                    record_audio_prompt = gr.Audio(label='recorded audio prompt', source='microphone', interactive=True)
+                    textbox_transcript = gr.TextArea(
+                        label="Transcript",
+                        placeholder="ここに入力音声の文字起こしを入力してください。(whisperを利用する場合は入力しなくてもOKです)",
+                        value="", elem_id=f"prompt-name"
+                        )
+                    upload_audio_prompt = gr.Audio(label='入力音声ファイルをアップロード', source='upload', interactive=True)
+                    record_audio_prompt = gr.Audio(label='入力音声を録音', source='microphone', interactive=True)
                 with gr.Column():
                     text_output = gr.Textbox(label="Message")
-                    audio_output = gr.Audio(label="Output Audio", elem_id="tts-audio")
-                    btn = gr.Button("Generate!")
+                    audio_output = gr.Audio(label="出力音声", elem_id="tts-audio")
+                    btn = gr.Button("生成！")
                     btn.click(infer_from_audio,
-                              inputs=[textbox, language_dropdown, accent_dropdown, upload_audio_prompt, record_audio_prompt, textbox_transcript],
-                              outputs=[text_output, audio_output])
-                    textbox_mp = gr.TextArea(label="Prompt name",
-                                          placeholder="Name your prompt here",
-                                          value="prompt_1", elem_id=f"prompt-name")
-                    btn_mp = gr.Button("Make prompt!")
+                            inputs=[textbox, language_dropdown, accent_dropdown, upload_audio_prompt, record_audio_prompt, textbox_transcript],
+                            outputs=[text_output, audio_output])
+                    textbox_mp = gr.TextArea(
+                        label="プロンプト名",
+                        placeholder="保存時のプロンプト名を入力してください",
+                        value="prompt_1", elem_id=f"prompt-name"
+                        )
+                    btn_mp = gr.Button("プロンプトを作成！")
                     prompt_output = gr.File(interactive=False)
                     btn_mp.click(make_npz_prompt,
                                 inputs=[textbox_mp, upload_audio_prompt, record_audio_prompt, textbox_transcript],
@@ -547,63 +564,69 @@ def main():
                         outputs=[text_output, audio_output],
                         fn=infer_from_audio,
                         cache_examples=False,)
-        with gr.Tab("Make prompt"):
+        with gr.Tab("プロンプトを作成"):
             gr.Markdown(make_prompt_md)
             with gr.Row():
                 with gr.Column():
-                    textbox2 = gr.TextArea(label="Prompt name",
-                                          placeholder="Name your prompt here",
-                                          value="prompt_1", elem_id=f"prompt-name")
-                    # 添加选择语言和输入台本的地方
-                    textbox_transcript2 = gr.TextArea(label="Transcript",
-                                          placeholder="Write transcript here. (leave empty to use whisper)",
-                                          value="", elem_id=f"prompt-name")
-                    upload_audio_prompt_2 = gr.Audio(label='uploaded audio prompt', source='upload', interactive=True)
-                    record_audio_prompt_2 = gr.Audio(label='recorded audio prompt', source='microphone', interactive=True)
+                    textbox2 = gr.TextArea(
+                        label="プロンプト名",
+                        placeholder="保存時のプロンプト名を入力してください",
+                        value="prompt_1", elem_id=f"prompt-name"
+                        )
+                    # 言語の選択とスクリプトの入力場所の追加
+                    textbox_transcript2 = gr.TextArea(
+                        label="Transcript",
+                        placeholder="ここに入力音声の文字起こしを入力してください。(whisperを利用する場合は入力しなくてもOKです)",
+                        value="", elem_id=f"prompt-name"
+                        )
+                    upload_audio_prompt_2 = gr.Audio(label='入力音声ファイルをアップロード', source='upload', interactive=True)
+                    record_audio_prompt_2 = gr.Audio(label='入力音声を録音', source='microphone', interactive=True)
                 with gr.Column():
                     text_output_2 = gr.Textbox(label="Message")
                     prompt_output_2 = gr.File(interactive=False)
-                    btn_2 = gr.Button("Make!")
+                    btn_2 = gr.Button("プロンプトを作成！")
                     btn_2.click(make_npz_prompt,
-                              inputs=[textbox2, upload_audio_prompt_2, record_audio_prompt_2, textbox_transcript2],
-                              outputs=[text_output_2, prompt_output_2])
+                                inputs=[textbox2, upload_audio_prompt_2, record_audio_prompt_2, textbox_transcript2],
+                                outputs=[text_output_2, prompt_output_2])
             gr.Examples(examples=make_npz_prompt_examples,
                         inputs=[textbox2, upload_audio_prompt_2, record_audio_prompt_2, textbox_transcript2],
                         outputs=[text_output_2, prompt_output_2],
                         fn=make_npz_prompt,
                         cache_examples=False,)
-        with gr.Tab("Infer from prompt"):
+        with gr.Tab("プロンプトから推論"):
             gr.Markdown(infer_from_prompt_md)
             with gr.Row():
                 with gr.Column():
-                    textbox_3 = gr.TextArea(label="Text",
-                                          placeholder="Type your sentence here",
-                                          value="Welcome back, Master. What can I do for you today?", elem_id=f"tts-input")
+                    textbox_3 = gr.TextArea(
+                        label="Text",
+                        placeholder="ここに文章を入力",
+                        value="おかえりなさいませ、ご主人様。本日はどのようなご用件でしょうか？", elem_id=f"tts-input"
+                        )
                     language_dropdown_3 = gr.Dropdown(choices=['auto-detect', 'English', '中文', '日本語', 'Mix'], value='auto-detect',
                                                     label='language')
                     accent_dropdown_3 = gr.Dropdown(choices=['no-accent', 'English', '中文', '日本語'], value='no-accent',
-                                                  label='accent')
+                                                    label='accent')
                     preset_dropdown_3 = gr.Dropdown(choices=preset_list, value=None, label='Voice preset')
                     prompt_file = gr.File(file_count='single', file_types=['.npz'], interactive=True)
                 with gr.Column():
                     text_output_3 = gr.Textbox(label="Message")
-                    audio_output_3 = gr.Audio(label="Output Audio", elem_id="tts-audio")
-                    btn_3 = gr.Button("Generate!")
+                    audio_output_3 = gr.Audio(label="出力音声", elem_id="tts-audio")
+                    btn_3 = gr.Button("生成！")
                     btn_3.click(infer_from_prompt,
-                              inputs=[textbox_3, language_dropdown_3, accent_dropdown_3, preset_dropdown_3, prompt_file],
-                              outputs=[text_output_3, audio_output_3])
+                                inputs=[textbox_3, language_dropdown_3, accent_dropdown_3, preset_dropdown_3, prompt_file],
+                                outputs=[text_output_3, audio_output_3])
             gr.Examples(examples=infer_from_prompt_examples,
                         inputs=[textbox_3, language_dropdown_3, accent_dropdown_3, preset_dropdown_3, prompt_file],
                         outputs=[text_output_3, audio_output_3],
                         fn=infer_from_prompt,
                         cache_examples=False,)
-        with gr.Tab("Infer long text"):
-            gr.Markdown("This is a long text generation demo. You can use this to generate long audio. ")
+        with gr.Tab("長文推論"):
+            gr.Markdown("これは長いテキストを生成するデモです。これを使って長い音声を生成することができます。")
             with gr.Row():
                 with gr.Column():
                     textbox_4 = gr.TextArea(label="Text",
-                                          placeholder="Type your sentence here",
-                                          value=long_text_example, elem_id=f"tts-input")
+                                            placeholder="ここに文章を入力",
+                                            value=long_text_example, elem_id=f"tts-input")
                     language_dropdown_4 = gr.Dropdown(choices=['auto-detect', 'English', '中文', '日本語'], value='auto-detect',
                                                     label='language')
                     accent_dropdown_4 = gr.Dropdown(choices=['no-accent', 'English', '中文', '日本語'], value='no-accent',
@@ -612,11 +635,11 @@ def main():
                     prompt_file_4 = gr.File(file_count='single', file_types=['.npz'], interactive=True)
                 with gr.Column():
                     text_output_4 = gr.TextArea(label="Message")
-                    audio_output_4 = gr.Audio(label="Output Audio", elem_id="tts-audio")
+                    audio_output_4 = gr.Audio(label="出力音声", elem_id="tts-audio")
                     btn_4 = gr.Button("Generate!")
                     btn_4.click(infer_long_text,
-                              inputs=[textbox_4, preset_dropdown_4, prompt_file_4, language_dropdown_4, accent_dropdown_4],
-                              outputs=[text_output_4, audio_output_4])
+                                inputs=[textbox_4, preset_dropdown_4, prompt_file_4, language_dropdown_4, accent_dropdown_4],
+                                outputs=[text_output_4, audio_output_4])
 
     webbrowser.open("http://127.0.0.1:7860")
     app.launch()

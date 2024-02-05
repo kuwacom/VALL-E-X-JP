@@ -1,7 +1,17 @@
+# What Is This
+このリポジトリはWEBUIの日本語化及び機能追加を目的としたものです。
+
+中身自体は別リポジトリで作っているものの実質的なコピーです。(途中でフォークリポジトリとしてコードを追加し始めた)
+
+VALL-E X 用のツール等を作っているリポジトリ
+https://github.com/kuwacom/vaLL-E-X-Tools
+
+
+# 元リポジトリのREADME
 # VALL-E X: Multilingual Text-to-Speech Synthesis and Voice Cloning 🔊
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/qCBRmAnTxg)
 <br>
-English | [中文](README-ZH.md)
+English
 <br>
 An open source implementation of Microsoft's [VALL-E X](https://arxiv.org/pdf/2303.03926) zero-shot TTS model.<br>
 **We release our trained model to the public for research or application usage.**
